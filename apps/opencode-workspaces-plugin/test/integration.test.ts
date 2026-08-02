@@ -8,14 +8,30 @@
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { spawn, ChildProcess } from 'node:child_process'
-import { mkdir, writeFile, rm, readdir } from 'node:fs/promises'
+import { mkdir, writeFile, rm, readFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Daytona } from '@daytona/sdk'
 
 const OPENCODE_BIN = process.env.OPENCODE_BIN || `${process.env.HOME}/.opencode/bin/opencode`
 const HAS_DAYTONA_KEY = Boolean(process.env.DAYTONA_API_KEY)
+
+// The real plugin, loaded from source — see createTestProject().
+const PLUGIN_PATH = resolve(import.meta.dir, '../.opencode/plugin/index.ts')
+const PLUGIN_SPEC = `file://${PLUGIN_PATH}`
+
+// The plugin's own debug log. It records every workspace it starts building,
+// which is the only reliable way to know what to clean up when a create call
+// hangs rather than returning. Kept in sync with e2e-tui.test.ts.
+const PLUGIN_LOG = '/tmp/daytona-plugin.log'
+async function readLog(): Promise<string> {
+  return await readFile(PLUGIN_LOG, 'utf8').catch(() => '')
+}
+
+// Branch the test repo is pinned to, and the branch the workspace is asked for.
+// These must agree: the plugin clones with --branch, so a mismatch fails create.
+const TEST_BRANCH = 'main'
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -95,153 +111,32 @@ async function createTestProject(baseDir: string): Promise<string> {
   await spawnAsync(['git', 'config', 'user.name', 'Test'], { cwd: projectDir })
   await spawnAsync(['git', 'add', '-A'], { cwd: projectDir })
   await spawnAsync(['git', 'commit', '-m', 'init'], { cwd: projectDir })
+  // Force the branch name rather than inheriting the host's init.defaultBranch,
+  // which varies (master on older git, main on newer). The workspace is created
+  // with `branch: TEST_BRANCH`, and the plugin passes that to `git clone --branch`.
+  await spawnAsync(['git', 'branch', '-M', TEST_BRANCH], { cwd: projectDir })
 
-  // Copy plugin as a single file at .opencode/plugin/daytona.ts
-  const pluginDir = join(projectDir, '.opencode', 'plugin')
-  await mkdir(pluginDir, { recursive: true })
-
-  // Create a simplified inline version of the plugin for testing
-  const pluginContent = `
-import { Daytona } from '@daytona/sdk'
-import type { PluginInput, WorkspaceAdapter } from '@opencode-ai/plugin'
-
-const REPO_PATH = '/home/daytona/workspace/repo'
-const SERVER_PORT = 3096
-const HEALTH_URL = \`http://127.0.0.1:\${SERVER_PORT}/global/health\`
-
-function sh(value: string): string {
-  return "'" + value.replace(/'/g, "'\\"'\\"'") + "'"
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-let daytonaClient: Daytona | undefined
-
-function getDaytona(): Daytona {
-  if (daytonaClient == null) {
-    daytonaClient = new Daytona({ apiKey: process.env.DAYTONA_API_KEY })
-  }
-  return daytonaClient
-}
-
-const previewCache = new Map<string, { url: string; token: string }>()
-
-function sandboxName(name: string): string {
-  return \`opencode-\${name}\`
-}
-
-export const DaytonaPlugin = async (input: PluginInput) => {
-  const { experimental_workspace } = input
-
-  if (!process.env.DAYTONA_API_KEY) {
-    console.warn('[daytona] DAYTONA_API_KEY is not set')
-    return {}
-  }
-
-  const adaptor: WorkspaceAdapter = {
-    name: 'Daytona',
-    description: 'Create a remote Daytona sandbox workspace',
-
-    configure(config) {
-      return config
-    },
-
-    async create(config) {
-      console.log('[daytona] Creating workspace:', config.name)
-
-      const d = getDaytona()
-      const sandbox = await d.create({ name: sandboxName(config.name) })
-
-      // Create directory structure
-      await sandbox.process.executeCommand(\`mkdir -p \${sh(REPO_PATH)}\`)
-
-      // Install and start opencode
-      await sandbox.process.executeCommand(
-        \`mkdir -p "$HOME/.opencode/bin" && OPENCODE_INSTALL_DIR="$HOME/.opencode/bin" curl -fsSL https://opencode.ai/install | bash\`
-      )
-
-      await sandbox.process.executeCommand(
-        \`cd \${sh(REPO_PATH)} && nohup "$HOME/.opencode/bin/opencode" serve --hostname 0.0.0.0 --port \${SERVER_PORT} >/tmp/opencode.log 2>&1 </dev/null &\`
-      )
-
-      // Wait for server
-      for (let i = 0; i < 60; i++) {
-        const result = await sandbox.process.executeCommand(\`curl -fsS \${sh(HEALTH_URL)}\`)
-        if (result.exitCode === 0) {
-          console.log('[daytona] Server ready')
-          return
-        }
-        await sleep(1000)
-      }
-
-      throw new Error('Server did not start')
-    },
-
-    async remove(config) {
-      const d = getDaytona()
-      const sandbox = await d.get(sandboxName(config.name)).catch(() => undefined)
-      if (!sandbox) return
-      await d.delete(sandbox)
-      previewCache.delete(config.name)
-    },
-
-    async target(config) {
-      let link = previewCache.get(config.name)
-      if (!link) {
-        const sandbox = await getDaytona().get(sandboxName(config.name))
-        link = await sandbox.getPreviewLink(SERVER_PORT)
-        previewCache.set(config.name, link)
-      }
-      return {
-        type: 'remote' as const,
-        url: link.url,
-        headers: {
-          'x-daytona-preview-token': link.token,
-          'x-daytona-skip-preview-warning': 'true',
-          'x-opencode-directory': REPO_PATH,
-        },
-      }
-    },
-  }
-
-  experimental_workspace.register('daytona', adaptor)
-  console.log('[daytona] Registered daytona adapter')
-
-  return {}
-}
-
-export default DaytonaPlugin
-`
-  await writeFile(join(pluginDir, 'daytona.ts'), pluginContent)
-
-  // Install dependencies needed by the plugin
+  // Load the REAL plugin, the same way plugin.test.ts does: a file:// spec
+  // pointing at this package's source.
+  //
+  // This previously inlined a ~115-line copy of the adaptor. The copy drifted
+  // from the real plugin and was missing two fixes that matter here: the
+  // create() error path (so a failure leaked its sandbox) and the bounded
+  // health polls (so it hung instead of failing). A copy of the thing under
+  // test proves nothing about the thing under test.
+  //
+  // No npm install in the temp project either — the plugin's imports resolve
+  // from this package's node_modules, because the spec points inside it.
   await writeFile(
-    join(projectDir, 'package.json'),
+    join(projectDir, 'opencode.json'),
     JSON.stringify(
       {
-        name: 'integration-test',
-        version: '1.0.0',
-        dependencies: {
-          '@daytona/sdk': '*',
-          '@opencode-ai/plugin': '*',
-        },
+        $schema: 'https://opencode.ai/config.json',
+        plugin: [PLUGIN_SPEC],
       },
       null,
       2,
     ),
-  )
-
-  console.log('Installing plugin dependencies...')
-  await spawnAsync(['npm', 'install'], { cwd: projectDir })
-
-  // Create opencode.json config
-  await writeFile(
-    join(projectDir, 'opencode.json'),
-    JSON.stringify({
-      $schema: 'https://opencode.ai/config.json',
-    }),
   )
 
   return projectDir
@@ -254,6 +149,7 @@ describe.skipIf(!HAS_DAYTONA_KEY)('integration', () => {
   let serverPort: number
   let createdSandboxId: string | null = null
   let daytona: Daytona
+  let logOffset = 0
 
   beforeAll(async () => {
     daytona = new Daytona({ apiKey: process.env.DAYTONA_API_KEY })
@@ -265,8 +161,8 @@ describe.skipIf(!HAS_DAYTONA_KEY)('integration', () => {
     projectDir = await createTestProject(testDir)
     console.log(`Project created at: ${projectDir}`)
 
-    const pluginCheck = await readdir(join(projectDir, '.opencode', 'plugin'))
-    console.log(`Plugin files: ${pluginCheck.join(', ')}`)
+    console.log(`Plugin loaded from: ${PLUGIN_SPEC}`)
+    logOffset = (await readLog()).length
 
     console.log('\n=== Step 2: Start OpenCode server ===')
     console.log(`Running: ${OPENCODE_BIN} serve --port ${serverPort}`)
@@ -303,13 +199,24 @@ describe.skipIf(!HAS_DAYTONA_KEY)('integration', () => {
       serverProc.kill('SIGTERM')
     }
 
-    if (createdSandboxId) {
-      console.log('Deleting sandbox...')
+    // Sweep, rather than relying on createdSandboxId alone. That variable is only
+    // assigned once the create request comes back, so anything that stops the
+    // request returning — a hang, a client-side timeout, a failed assertion —
+    // used to leave a running sandbox behind with nothing recording its name.
+    // The plugin logs every workspace it starts building, so parse that instead.
+    const doomed = new Set<string>()
+    if (createdSandboxId) doomed.add(createdSandboxId)
+    for (const m of (await readLog()).slice(logOffset).matchAll(/create: start name=(\S+)/g)) {
+      doomed.add(`opencode-${m[1]}`)
+    }
+
+    for (const idOrName of doomed) {
+      console.log(`Deleting sandbox ${idOrName}...`)
       try {
-        const sandbox = await daytona.get(createdSandboxId)
+        const sandbox = await daytona.get(idOrName)
         await daytona.delete(sandbox)
       } catch {
-        // Ignore cleanup errors
+        // Already gone, or never created — either way nothing to clean up.
       }
     }
 
@@ -335,7 +242,7 @@ describe.skipIf(!HAS_DAYTONA_KEY)('integration', () => {
       body: JSON.stringify({
         type: 'daytona',
         name: `integration-test-${Date.now()}`,
-        branch: 'master',
+        branch: TEST_BRANCH,
       }),
     })
 
