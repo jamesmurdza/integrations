@@ -57,7 +57,13 @@ const HEALTH_URL = `http://127.0.0.1:${SERVER_PORT}/global/health`
 // installer skips its "latest release" lookup against api.github.com, which is
 // rate-limited (HTTP 429) and fails with "Failed to fetch version information"
 // when many sandboxes install in a short window. Bump as needed.
-const OPENCODE_VERSION = '1.15.13'
+//
+// Keep this at (or above) the version that ships the built-in "opencode" Zen
+// provider's free models (e.g. opencode/big-pickle). Older builds like 1.15.13
+// expose no opencode/* models at all, so a session created with one silently
+// produces no assistant reply — the remote server is healthy but has no usable
+// model. Bumping here keeps the remote in step with recent host builds.
+const OPENCODE_VERSION = '1.18.11'
 
 // POSIX-safe single-quote escape: close quote, emit literal ', reopen quote.
 function sh(value: string): string {
@@ -269,6 +275,26 @@ export const DaytonaWorkspacePlugin = async (input: PluginInput) => {
         await run(
           `rm -rf ${sh(REPO_PATH)} && mkdir -p ${sh(ROOT_PATH)} && tar -xzf "$HOME/repo.tgz" -C "$HOME/workspace" && rm "$HOME/repo.tgz"`,
         )
+
+        // Bridge the host's project path to the sandbox repo. opencode proxies
+        // every remote session request with `?directory=<host worktree>` in the
+        // URL, and the server resolves the directory from that query param before
+        // the x-opencode-directory header (see opencode's directory resolution:
+        // searchParams "directory" || header || cwd). That host path (e.g.
+        // /tmp/…, /Users/…) does not exist in the sandbox, so the remote session
+        // dies immediately with `FileSystem.realPath ENOENT` and never replies.
+        // Symlinking the host worktree path to REPO_PATH makes that query param
+        // resolve to the extracted repo, so remote sessions run in the right place.
+        //
+        // WORKAROUND: opencode PR anomalyco/opencode#40136 fixes this upstream by
+        // stripping the `directory` query param before proxying to the remote (so
+        // it falls back to its own project root). Once that ships in a release and
+        // OPENCODE_VERSION above is bumped to include it, this symlink is redundant
+        // and can be removed.
+        if (worktree) {
+          debug(`create: linking host worktree ${worktree} -> ${REPO_PATH}`)
+          await run(`mkdir -p "$(dirname ${sh(worktree)})" && ln -sfn ${sh(REPO_PATH)} ${sh(worktree)}`)
+        }
 
         debug(`create: installing opencode ${OPENCODE_VERSION} in sandbox`)
         await run(
