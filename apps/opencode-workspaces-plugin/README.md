@@ -2,6 +2,8 @@
 
 OpenCode plugin that provisions Daytona sandboxes as remote workspaces.
 
+> **Not published to npm.** This plugin is installed from a local checkout — see [Installation](#installation). If you want the published, npm-installable Daytona plugin instead, see [`packages/opencode-plugin`](../../packages/opencode-plugin) ([`@daytona/opencode`](https://www.npmjs.com/package/@daytona/opencode)) and the comparison in [Relationship to `@daytona/opencode`](#relationship-to-daytonaopencode).
+
 ## Features
 
 - Create Daytona sandboxes as remote OpenCode workspaces
@@ -19,18 +21,27 @@ OpenCode plugin that provisions Daytona sandboxes as remote workspaces.
 
 ### Installation
 
-Add the plugin to your project's `.opencode/opencode.jsonc`:
+Clone this repository, then point OpenCode at the plugin source by absolute path.
+
+```bash
+git clone https://github.com/daytona/integrations
+cd integrations/apps/opencode-workspaces-plugin
+npm ci
+pwd   # note this path; it is used below
+```
+
+Add a `file://` plugin spec to your project's `.opencode/opencode.jsonc`:
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@daytona/opencode"],
+  "plugin": ["file:///ABSOLUTE/PATH/TO/integrations/apps/opencode-workspaces-plugin/.opencode/plugin/index.ts"],
 }
 ```
 
-The plugin will be automatically downloaded when OpenCode starts.
+To install for every project, edit `~/.config/opencode/opencode.jsonc` instead.
 
-To install globally, edit `~/.config/opencode/opencode.jsonc`.
+Alternatively, symlink the whole `.opencode` directory into your project — see [Local Development](#local-development). Either way OpenCode loads the TypeScript source directly, so no build step is required.
 
 ### Environment Configuration
 
@@ -75,7 +86,7 @@ When you delete a Daytona workspace from OpenCode, the associated sandbox is aut
 Verify the plugin source parses and ESM-links through bun's CLI:
 
 ```bash
-cd libs/opencode-plugin
+cd apps/opencode-workspaces-plugin
 bun -e 'import("./.opencode/plugin/index.ts").catch(e => { console.error(e); process.exit(1) })'
 ```
 
@@ -95,69 +106,78 @@ kill %1 2>/dev/null
 
 Starts a headless OpenCode server, queries `/experimental/workspace/adapter`, and prints `OK` if the `daytona` type appears in the response.
 
+### Plugin log
+
+The plugin logs workspace lifecycle events to a fixed file (stdout is kept clean for the UI):
+
+```bash
+tail -f /tmp/daytona-plugin.log
+```
+
 ### Latest log
 
 Grep the most recent OpenCode log for plugin-loading errors:
 
 ```bash
-ls -t ~/.local/share/opencode/log/*.log | head -1 | xargs grep -E "ERROR|@daytona|opencode/plugin/index"
+ls -t ~/.local/share/opencode/log/*.log | head -1 | xargs grep -E "ERROR|daytona|opencode/plugin/index"
 ```
 
-## Migrating from v0.167.0
+## Relationship to `@daytona/opencode`
 
-Version 0.168.0 rewrites the plugin to use OpenCode's workspace adaptor API. This provides a simpler architecture but removes some features from the original implementation:
+This plugin and [`packages/opencode-plugin`](../../packages/opencode-plugin) both run OpenCode against Daytona sandboxes, but they take opposite approaches:
+
+| | This plugin | `@daytona/opencode` |
+|---|---|---|
+| Mechanism | Registers a **workspace adaptor**; the sandbox runs its own `opencode serve` and tool calls are proxied to it | Reimplements each **tool** (bash, edit, grep, …) to execute against the sandbox |
+| Activation | Opt-in per workspace via `/warp` | Every session |
+| Requires | `OPENCODE_EXPERIMENTAL_WORKSPACES=true` | — |
+| Distribution | This repo, `file://` spec | npm |
+
+Features present in `@daytona/opencode` that this plugin deliberately does **not** carry over:
 
 - Bidirectional git sync between local and sandbox
 - Auto-commit on session idle
 - Custom tool implementations (bash, edit, grep, etc.)
 
-If you need these features, pin to the last version that includes them:
-
-```json
-{
-  "dependencies": {
-    "@daytona/opencode": "0.167.0"
-  }
-}
-```
-
-> **Note:** v0.167.0 will not receive updates and may break with future OpenCode versions.
+Because the sandbox runs a real OpenCode server, tools work there natively rather than being reimplemented — which is what removes the need for most of the above.
 
 ## Development
 
-This plugin is part of the Daytona monorepo.
-
 ### Setup
 
-Clone the Daytona monorepo:
-
 ```bash
-git clone https://github.com/daytonaio/daytona
-cd daytona
-```
-
-Install dependencies:
-
-```bash
-yarn install
+git clone https://github.com/daytona/integrations
+cd integrations/apps/opencode-workspaces-plugin
+npm ci
 ```
 
 ### Running Tests
 
-Run the test suite:
+The suite is [bun](https://bun.sh)-based, so you need `bun` on your PATH. Everything else comes from `npm ci` — `opencode-ai` is a devDependency that ships the `opencode` binary, and the `test` script points `OPENCODE_BIN`/`PATH` at `node_modules/.bin`, so no global install is required.
 
 ```bash
-npx nx run opencode-plugin:test
+npm ci
+export DAYTONA_API_KEY="your-api-key"
+npm test
 ```
 
-Or directly with bun:
+Coverage depends on what is available, and **missing prerequisites cause skips, not failures** — always read the skip count rather than trusting a green run:
+
+| File | Needs | Covers |
+|---|---|---|
+| `test/plugin.test.ts` | nothing (1 test) · `DAYTONA_API_KEY` (1 test) | adaptor registration; sandbox cleanup when `create()` fails partway |
+| `test/integration.test.ts` | `DAYTONA_API_KEY` | workspace create + delete through the OpenCode API |
+| `test/e2e-tui.test.ts` | `DAYTONA_API_KEY` + `tmux` | drives the real TUI: `/warp` → Daytona → chat round-trip |
+
+Run one file at a time by passing a filter through the same script:
 
 ```bash
-cd libs/opencode-plugin
-bun test --timeout 180000
+npm test -- test/integration.test.ts
 ```
 
-Set `DAYTONA_API_KEY` to run the full test suite including sandbox cleanup tests.
+Prefer that over calling `bun test` directly. `integration.test.ts` and `e2e-tui.test.ts` launch the binary by absolute path (`OPENCODE_BIN`, defaulting to `~/.opencode/bin/opencode`), which only the `test` script sets — without it they look for a global install that a fresh clone does not have. The failure is quiet: `integration` waits 60s and reports "Server did not start", and `e2e-tui` simply skips.
+
+**Nothing runs this suite in CI.** Like the other entries in `apps/`, this one has no workflow — every run provisions real, billable Daytona sandboxes, so it is a deliberate local/pre-release step rather than something a pull request triggers. Run it by hand before you rely on a change.
 
 ### Local Development
 
@@ -165,7 +185,7 @@ To test the plugin locally, create a symlink in your test project:
 
 ```bash
 mkdir /tmp/myproject && cd /tmp/myproject
-ln -s [ABSOLUTE_PATH_TO_DAYTONA]/libs/opencode-plugin/.opencode .opencode
+ln -s [ABSOLUTE_PATH_TO_INTEGRATIONS]/apps/opencode-workspaces-plugin/.opencode .opencode
 git init
 OPENCODE_EXPERIMENTAL_WORKSPACES=true opencode
 ```
@@ -181,33 +201,31 @@ cd ~/opencode
 OPENCODE_EXPERIMENTAL_WORKSPACES=true bun dev /tmp/myproject
 ```
 
-### Building
+### Type-checking and building
+
+`tsc` emits `.js` + `.d.ts` beside the sources (both are gitignored). Nothing consumes that output today — OpenCode loads the `.ts` directly — but the typecheck is worth running after changes, since it is what catches drift in `@opencode-ai/plugin`'s experimental workspace-adaptor API:
 
 ```bash
-npx nx run opencode-plugin:build
-```
-
-### Publishing
-
-```bash
-npm login
-npx nx run opencode-plugin:publish
+npm run typecheck
+npm run build
 ```
 
 ## Project Structure
 
 ```
-libs/opencode-plugin/
+apps/opencode-workspaces-plugin/
 ├── .opencode/
 │   └── plugin/
 │       ├── daytona/
 │       │   ├── index.ts
 │       │   └── instructions.ts
 │       └── index.ts
+├── test/
+│   ├── e2e-tui.test.ts
+│   ├── integration.test.ts
+│   └── plugin.test.ts
 ├── package.json
-├── project.json
 ├── tsconfig.json
-├── tsconfig.lib.json
 └── README.md
 ```
 
