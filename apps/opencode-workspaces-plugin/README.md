@@ -153,7 +153,7 @@ npm ci
 
 ### Running Tests
 
-The suite is [bun](https://bun.sh)-based, so you need `bun` on your PATH. Everything else comes from `npm ci` — `opencode-ai` is a devDependency that ships the `opencode` binary, and the `test` script points `OPENCODE_BIN`/`PATH` at `node_modules/.bin`, so no global install is required.
+The suite is [bun](https://bun.sh)-based, so you need `bun` on your PATH. Everything else comes from `npm ci` — `opencode-ai` is a devDependency that ships the `opencode` binary, and the tests resolve it out of `node_modules`, so no global install is required.
 
 ```bash
 npm ci
@@ -169,13 +169,14 @@ Coverage depends on what is available, and **missing prerequisites cause skips, 
 | `test/integration.test.ts` | `DAYTONA_API_KEY` | workspace create + delete through the OpenCode API |
 | `test/e2e-tui.test.ts` | `DAYTONA_API_KEY` + `tmux` | drives the real TUI: `/warp` → Daytona → chat round-trip |
 
-Run one file at a time by passing a filter through the same script:
+Run one file at a time, either way round:
 
 ```bash
 npm test -- test/integration.test.ts
+bun test test/integration.test.ts
 ```
 
-Prefer that over calling `bun test` directly. `integration.test.ts` and `e2e-tui.test.ts` launch the binary by absolute path (`OPENCODE_BIN`, defaulting to `~/.opencode/bin/opencode`), which only the `test` script sets — without it they look for a global install that a fresh clone does not have. The failure is quiet: `integration` waits 60s and reports "Server did not start", and `e2e-tui` simply skips.
+To run against a local OpenCode build instead of the installed one, set `OPENCODE_BIN`.
 
 **Nothing runs this suite in CI.** Like the other entries in `apps/`, this one has no workflow — every run provisions real, billable Daytona sandboxes, so it is a deliberate local/pre-release step rather than something a pull request triggers. Run it by hand before you rely on a change.
 

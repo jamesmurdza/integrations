@@ -26,13 +26,16 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { mkdtemp, writeFile, rm, symlink, readFile } from 'node:fs/promises'
-import { tmpdir, homedir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Daytona } from '@daytona/sdk'
 
 const HAS_KEY = Boolean(process.env.DAYTONA_API_KEY)
 const HAS_TMUX = spawnSync('tmux', ['-V'], { encoding: 'utf8' }).status === 0
-const OPENCODE_BIN = process.env.OPENCODE_BIN || join(homedir(), '.opencode/bin/opencode')
+// Default to the binary npm ci installs (opencode-ai ships it as platform
+// optionalDependencies), not a global install — otherwise a fresh clone silently
+// skips this whole file. Set OPENCODE_BIN to point at a local OpenCode build.
+const OPENCODE_BIN = process.env.OPENCODE_BIN || resolve(import.meta.dir, '../node_modules/.bin/opencode')
 const HAS_BIN = spawnSync(OPENCODE_BIN, ['--version'], { encoding: 'utf8' }).status === 0
 const ENABLED = HAS_KEY && HAS_TMUX && HAS_BIN
 
