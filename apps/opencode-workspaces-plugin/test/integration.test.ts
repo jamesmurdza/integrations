@@ -14,7 +14,11 @@ import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Daytona } from '@daytona/sdk'
 
-const OPENCODE_BIN = process.env.OPENCODE_BIN || `${process.env.HOME}/.opencode/bin/opencode`
+// Default to the binary npm ci installs (opencode-ai ships it as platform
+// optionalDependencies), not a global install. This test spawns it by absolute
+// path, so unlike plugin.test.ts it gets no help from node_modules/.bin being on
+// PATH. Set OPENCODE_BIN to point at a local OpenCode build instead.
+const OPENCODE_BIN = process.env.OPENCODE_BIN || resolve(import.meta.dir, '../node_modules/.bin/opencode')
 const HAS_DAYTONA_KEY = Boolean(process.env.DAYTONA_API_KEY)
 
 // The real plugin, loaded from source — see createTestProject().

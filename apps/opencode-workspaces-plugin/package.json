@@ -23,7 +23,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "OPENCODE_BIN=\"$PWD/node_modules/.bin/opencode\" PATH=\"$PWD/node_modules/.bin:$PATH\" bun test --timeout 180000"
+    "test": "bun test --timeout 180000"
   },
   "dependencies": {
     "@daytona/sdk": "^0.163.0",
