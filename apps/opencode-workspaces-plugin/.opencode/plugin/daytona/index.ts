@@ -285,6 +285,12 @@ export const DaytonaWorkspacePlugin = async (input: PluginInput) => {
         // dies immediately with `FileSystem.realPath ENOENT` and never replies.
         // Symlinking the host worktree path to REPO_PATH makes that query param
         // resolve to the extracted repo, so remote sessions run in the right place.
+        //
+        // WORKAROUND: opencode PR anomalyco/opencode#40136 fixes this upstream by
+        // stripping the `directory` query param before proxying to the remote (so
+        // it falls back to its own project root). Once that ships in a release and
+        // OPENCODE_VERSION above is bumped to include it, this symlink is redundant
+        // and can be removed.
         if (worktree) {
           debug(`create: linking host worktree ${worktree} -> ${REPO_PATH}`)
           await run(`mkdir -p "$(dirname ${sh(worktree)})" && ln -sfn ${sh(REPO_PATH)} ${sh(worktree)}`)
