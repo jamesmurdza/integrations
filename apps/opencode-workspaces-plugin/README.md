@@ -143,37 +143,31 @@ The sandbox runs a real OpenCode server, so tools work there natively rather tha
 
 ## Development
 
-Setup is the same as [Installation](#installation): clone the repo and run `npm ci`.
-
 ### Running Tests
 
-Prerequisites:
-
-- `bun` on your PATH (the test runner).
-- `npm ci` — installs everything else, including the `opencode` binary (from the `opencode-ai` devDependency). The tests resolve it from `node_modules`; no global install needed.
-
-```bash
-export DAYTONA_API_KEY="your-api-key"
-npm test
-```
-
-Coverage depends on what is available, and **missing prerequisites cause skips, not failures** — always read the skip count rather than trusting a green run:
+The suite has three test files:
 
 | File | Needs | Covers |
 |---|---|---|
-| `test/plugin.test.ts` | nothing (1 test) · `DAYTONA_API_KEY` (1 test) | adaptor registration; sandbox cleanup when `create()` fails partway |
-| `test/integration.test.ts` | `DAYTONA_API_KEY` | workspace create + delete through the OpenCode API |
-| `test/e2e-tui.test.ts` | `DAYTONA_API_KEY` + `tmux` | drives the real TUI: `/warp` → Daytona → chat round-trip |
+| `test/plugin.test.ts` | nothing (1 test) · `DAYTONA_API_KEY` (1 test) | Checks the plugin registers with OpenCode, and that a workspace whose creation fails partway deletes its sandbox instead of leaving it running (and billing). |
+| `test/integration.test.ts` | `DAYTONA_API_KEY` | Creates a workspace through the OpenCode API, confirms the sandbox exists, then deletes it. |
+| `test/e2e-tui.test.ts` | `DAYTONA_API_KEY` + `tmux` | Drives the real OpenCode terminal UI end to end: runs `/warp`, creates a Daytona workspace, and sends a chat message to confirm the sandbox replies. |
 
-Run one file at a time (`npm test` applies the required `--timeout`; a bare `bun test` uses bun's 5 s default and times out):
+Before running, install the following prerequisites:
+
+- `bun` on your PATH (the test runner).
+- `npm ci` — installs everything else, including the `opencode` binary (from the `opencode-ai` devDependency); resolved from `node_modules`, no global install needed.
+- `DAYTONA_API_KEY` for the sandbox tests, plus `tmux` for the e2e TUI test (see the table above). Missing prerequisites cause **skips, not failures** — read the skip count rather than trusting a green run.
+
+Then run the tests:
 
 ```bash
-npm test -- test/integration.test.ts
+export DAYTONA_API_KEY="your-api-key"
+npm test                                # all files
+npm test -- test/integration.test.ts    # one file
 ```
 
-To run against a local OpenCode build instead of the installed one, set `OPENCODE_BIN`.
-
-Each run provisions real, billable Daytona sandboxes, so run it by hand — nothing runs this suite in CI.
+`npm test` applies the required `--timeout`; a bare `bun test` uses bun's 5 s default and times out. To run against a local OpenCode build instead of the installed one, set `OPENCODE_BIN`.
 
 ### Local Development
 
