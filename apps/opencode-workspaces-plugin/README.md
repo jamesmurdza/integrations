@@ -139,24 +139,20 @@ Features present in `@daytona/opencode` that this plugin deliberately does **not
 - Auto-commit on session idle
 - Custom tool implementations (bash, edit, grep, etc.)
 
-Because the sandbox runs a real OpenCode server, tools work there natively rather than being reimplemented — which is what removes the need for most of the above.
+The sandbox runs a real OpenCode server, so tools work there natively rather than being reimplemented.
 
 ## Development
 
-### Setup
-
-```bash
-git clone https://github.com/daytona/integrations
-cd integrations/apps/opencode-workspaces-plugin
-npm ci
-```
+Setup is the same as [Installation](#installation): clone the repo and run `npm ci`.
 
 ### Running Tests
 
-The suite is [bun](https://bun.sh)-based, so you need `bun` on your PATH. Everything else comes from `npm ci` — `opencode-ai` is a devDependency that ships the `opencode` binary, and the tests resolve it out of `node_modules`, so no global install is required.
+Prerequisites:
+
+- `bun` on your PATH (the test runner).
+- `npm ci` — installs everything else, including the `opencode` binary (from the `opencode-ai` devDependency). The tests resolve it from `node_modules`; no global install needed.
 
 ```bash
-npm ci
 export DAYTONA_API_KEY="your-api-key"
 npm test
 ```
@@ -169,16 +165,15 @@ Coverage depends on what is available, and **missing prerequisites cause skips, 
 | `test/integration.test.ts` | `DAYTONA_API_KEY` | workspace create + delete through the OpenCode API |
 | `test/e2e-tui.test.ts` | `DAYTONA_API_KEY` + `tmux` | drives the real TUI: `/warp` → Daytona → chat round-trip |
 
-Run one file at a time, either way round:
+Run one file at a time (`npm test` applies the required `--timeout`; a bare `bun test` uses bun's 5 s default and times out):
 
 ```bash
 npm test -- test/integration.test.ts
-bun test test/integration.test.ts
 ```
 
 To run against a local OpenCode build instead of the installed one, set `OPENCODE_BIN`.
 
-**Nothing runs this suite in CI.** Like the other entries in `apps/`, this one has no workflow — every run provisions real, billable Daytona sandboxes, so it is a deliberate local/pre-release step rather than something a pull request triggers. Run it by hand before you rely on a change.
+Each run provisions real, billable Daytona sandboxes, so run it by hand — nothing runs this suite in CI.
 
 ### Local Development
 
@@ -191,8 +186,6 @@ git init
 OPENCODE_EXPERIMENTAL_WORKSPACES=true opencode
 ```
 
-> **Note:** When developing locally with a symlink, OpenCode loads the TypeScript source directly, so no build step is required.
-
 ### Running against a local OpenCode build
 
 To test against a from-source OpenCode checkout (e.g. `~/opencode`) instead of the installed binary, run its `dev` script with the test project (`/tmp/myproject` from above) as a trailing argument:
@@ -202,13 +195,12 @@ cd ~/opencode
 OPENCODE_EXPERIMENTAL_WORKSPACES=true bun dev /tmp/myproject
 ```
 
-### Type-checking and building
+### Type-checking
 
-`tsc` emits `.js` + `.d.ts` beside the sources (both are gitignored). Nothing consumes that output today — OpenCode loads the `.ts` directly — but the typecheck is worth running after changes, since it is what catches drift in `@opencode-ai/plugin`'s experimental workspace-adaptor API:
+OpenCode loads the `.ts` directly, so there's no build to run. Run the typecheck after changes — it catches drift in `@opencode-ai/plugin`'s experimental workspace-adaptor API:
 
 ```bash
 npm run typecheck
-npm run build
 ```
 
 ## Project Structure
