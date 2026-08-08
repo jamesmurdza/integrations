@@ -56,13 +56,8 @@ const HEALTH_URL = `http://127.0.0.1:${SERVER_PORT}/global/health`
 // Pin the opencode version installed in the sandbox. Passing VERSION to the
 // installer skips its "latest release" lookup against api.github.com, which is
 // rate-limited (HTTP 429) and fails with "Failed to fetch version information"
-// when many sandboxes install in a short window. Bump as needed.
-//
-// Keep this at (or above) the version that ships the built-in "opencode" Zen
-// provider's free models (e.g. opencode/big-pickle). Older builds like 1.15.13
-// expose no opencode/* models at all, so a session created with one silently
-// produces no assistant reply — the remote server is healthy but has no usable
-// model. Bumping here keeps the remote in step with recent host builds.
+// when many sandboxes install in a short window. Keep this in step with recent
+// host builds and bump as needed.
 const OPENCODE_VERSION = '1.18.15'
 
 // POSIX-safe single-quote escape: close quote, emit literal ', reopen quote.
