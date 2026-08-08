@@ -86,7 +86,12 @@ async function waitForServer(port: number, maxWait = 60000): Promise<boolean> {
   const start = Date.now()
   while (Date.now() - start < maxWait) {
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/global/health`)
+      // Per-request timeout: under bun's test runner a fetch to the child
+      // opencode server (spawned with piped stdio) can hang indefinitely even
+      // though the server is healthy. Without a timeout that single stuck fetch
+      // wedges the whole loop until the test hook times out. AbortSignal.timeout
+      // makes the request reject so the loop actually retries.
+      const res = await fetch(`http://127.0.0.1:${port}/global/health`, { signal: AbortSignal.timeout(3000) })
       if (res.ok) return true
     } catch {
       // Server not ready yet
