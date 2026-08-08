@@ -149,7 +149,7 @@ The suite has three test files:
 
 | File | Needs | Covers |
 |---|---|---|
-| `test/plugin.test.ts` | nothing (1 test) · `DAYTONA_API_KEY` (1 test) | Checks the plugin registers with OpenCode, and that a workspace whose creation fails partway deletes its sandbox instead of leaving it running (and billing). |
+| `test/plugin.test.ts` | `DAYTONA_API_KEY` | Checks the plugin registers with OpenCode, and that a workspace whose creation fails partway deletes its sandbox instead of leaving it running (and billing). |
 | `test/integration.test.ts` | `DAYTONA_API_KEY` | Creates a workspace through the OpenCode API, confirms the sandbox exists, then deletes it. |
 | `test/e2e-tui.test.ts` | `DAYTONA_API_KEY` + `tmux` | Drives the real OpenCode terminal UI end to end: runs `/warp`, creates a Daytona workspace, and sends a chat message to confirm the sandbox replies. |
 
