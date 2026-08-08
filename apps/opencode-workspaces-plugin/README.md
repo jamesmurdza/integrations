@@ -122,25 +122,6 @@ Grep the most recent OpenCode log for plugin-loading errors:
 ls -t ~/.local/share/opencode/log/*.log | head -1 | xargs grep -E "ERROR|daytona|opencode/plugin/index"
 ```
 
-## Relationship to `@daytona/opencode`
-
-This plugin and [`packages/opencode-plugin`](../../packages/opencode-plugin) both run OpenCode against Daytona sandboxes, but they take opposite approaches:
-
-| | This plugin | `@daytona/opencode` |
-|---|---|---|
-| Mechanism | Registers a **workspace adaptor**; the sandbox runs its own `opencode serve` and tool calls are proxied to it | Reimplements each **tool** (bash, edit, grep, …) to execute against the sandbox |
-| Activation | Opt-in per workspace via `/warp` | Every session |
-| Requires | `OPENCODE_EXPERIMENTAL_WORKSPACES=true` | — |
-| Distribution | This repo, `file://` spec | npm |
-
-Features present in `@daytona/opencode` that this plugin deliberately does **not** carry over:
-
-- Bidirectional git sync between local and sandbox
-- Auto-commit on session idle
-- Custom tool implementations (bash, edit, grep, etc.)
-
-The sandbox runs a real OpenCode server, so tools work there natively rather than being reimplemented.
-
 ## Development
 
 ### Running Tests
@@ -192,6 +173,25 @@ OpenCode loads the `.ts` directly, so there's no build to run. Run the typecheck
 ```bash
 npm run typecheck
 ```
+
+## Relationship to `@daytona/opencode`
+
+This plugin and [`packages/opencode-plugin`](../../packages/opencode-plugin) both run OpenCode against Daytona sandboxes, but they take opposite approaches:
+
+| | This plugin | `@daytona/opencode` |
+|---|---|---|
+| Mechanism | Registers a **workspace adaptor**; the sandbox runs its own `opencode serve` and tool calls are proxied to it | Reimplements each **tool** (bash, edit, grep, …) to execute against the sandbox |
+| Activation | Opt-in per workspace via `/warp` | Every session |
+| Requires | `OPENCODE_EXPERIMENTAL_WORKSPACES=true` | — |
+| Distribution | This repo, `file://` spec | npm |
+
+Features present in `@daytona/opencode` that this plugin deliberately does **not** carry over:
+
+- Bidirectional git sync between local and sandbox
+- Auto-commit on session idle
+- Custom tool implementations (bash, edit, grep, etc.)
+
+The sandbox runs a real OpenCode server, so tools work there natively rather than being reimplemented.
 
 ## Project Structure
 
