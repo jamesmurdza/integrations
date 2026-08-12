@@ -128,7 +128,7 @@ async function createTestProject(baseDir: string): Promise<string> {
   // Load the REAL plugin, the same way plugin.test.ts does: a file:// spec
   // pointing at this package's source.
   //
-  // This previously inlined a ~115-line copy of the adaptor. The copy drifted
+  // This previously inlined a ~115-line copy of the adapter. The copy drifted
   // from the real plugin and was missing two fixes that matter here: the
   // create() error path (so a failure leaked its sandbox) and the bounded
   // health polls (so it hung instead of failing). A copy of the thing under

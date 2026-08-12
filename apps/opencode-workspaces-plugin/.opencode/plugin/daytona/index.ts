@@ -4,7 +4,7 @@
  */
 
 /**
- * OpenCode plugin that registers Daytona sandboxes as a workspace adaptor.
+ * OpenCode plugin that registers Daytona sandboxes as a workspace adapter.
  * Each session spawns a remote sandbox running `opencode serve`; tool calls
  * are proxied over the preview URL rather than invoked locally.
  */
@@ -189,7 +189,7 @@ export const DaytonaWorkspacePlugin = async (input: PluginInput) => {
     console.warn('[daytona] DAYTONA_API_KEY is not set - Daytona workspaces will not work')
   }
 
-  const adaptor: WorkspaceAdapter = {
+  const adapter: WorkspaceAdapter = {
     name: 'Daytona',
     description: 'Create a remote Daytona sandbox workspace',
 
@@ -357,8 +357,8 @@ export const DaytonaWorkspacePlugin = async (input: PluginInput) => {
     },
   }
 
-  experimental_workspace.register('daytona', adaptor)
-  debug(`plugin loaded; registered 'daytona' adaptor (log file: ${LOG_FILE})`)
+  experimental_workspace.register('daytona', adapter)
+  debug(`plugin loaded; registered 'daytona' adapter (log file: ${LOG_FILE})`)
 
   return {}
 }

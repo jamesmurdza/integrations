@@ -92,9 +92,9 @@ bun -e 'import("./.opencode/plugin/index.ts").catch(e => { console.error(e); pro
 
 Bun's CLI honors the project's `tsconfig.json` while OpenCode's embedded runtime does not, so a pass here is necessary but not sufficient.
 
-### Adaptor registration
+### Adapter registration
 
-Confirm OpenCode itself registers the Daytona adaptor:
+Confirm OpenCode itself registers the Daytona adapter:
 
 ```bash
 cd /tmp/myproject
@@ -168,7 +168,7 @@ OPENCODE_EXPERIMENTAL_WORKSPACES=true bun dev /tmp/myproject
 
 ### Type-checking
 
-OpenCode loads the `.ts` directly, so there's no build to run. Run the typecheck after changes — it catches drift in `@opencode-ai/plugin`'s experimental workspace-adaptor API:
+OpenCode loads the `.ts` directly, so there's no build to run. Run the typecheck after changes — it catches drift in `@opencode-ai/plugin`'s experimental workspace-adapter API:
 
 ```bash
 npm run typecheck
@@ -180,7 +180,7 @@ This plugin and [`packages/opencode-plugin`](../../packages/opencode-plugin) bot
 
 | | This plugin | `@daytona/opencode` |
 |---|---|---|
-| Mechanism | Registers a **workspace adaptor**; the sandbox runs its own `opencode serve` and tool calls are proxied to it | Reimplements each **tool** (bash, edit, grep, …) to execute against the sandbox |
+| Mechanism | Registers a **workspace adapter**; the sandbox runs its own `opencode serve` and tool calls are proxied to it | Reimplements each **tool** (bash, edit, grep, …) to execute against the sandbox |
 | Activation | Opt-in per workspace via `/warp` | Every session |
 | Requires | `OPENCODE_EXPERIMENTAL_WORKSPACES=true` | — |
 | Distribution | This repo, `file://` spec | npm |
