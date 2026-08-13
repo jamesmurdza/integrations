@@ -75,6 +75,14 @@ OPENCODE_EXPERIMENTAL_WORKSPACES=true opencode
 
 Once created, all commands run inside the remote sandbox.
 
+### Limitations
+
+The workspace is a snapshot of your repo, not a live mirror:
+
+- **Only the last commit is uploaded.** The plugin clones your repo at `--depth 1`, so uncommitted or unstaged changes don't travel to the sandbox — commit before `/warp`.
+- **A repo's own OpenCode config is not carried over.** Any committed `.opencode/` is excluded from the upload and `opencode.json` is overwritten with the plugin's own config, so per-repo OpenCode settings don't apply remotely (yet).
+- **Provider credentials are forwarded to the sandbox.** Model keys are passed in as sandbox environment variables (so the remote can call models) and are therefore visible in the Daytona dashboard.
+
 ### Removing a Workspace
 
 When you delete a Daytona workspace from OpenCode, the associated sandbox is automatically cleaned up.
