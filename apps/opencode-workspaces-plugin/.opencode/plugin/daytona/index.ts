@@ -11,7 +11,7 @@
 
 import { spawn as nodeSpawn } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -205,7 +205,9 @@ export const DaytonaWorkspacePlugin = async (input: PluginInput) => {
         throw new Error('DAYTONA_API_KEY environment variable is not set')
       }
 
-      const temp = join(tmpdir(), `opencode-daytona-${Date.now()}`)
+      // Assigned a unique mkdtemp dir once the sandbox exists (below), so
+      // concurrent creates never share a scratch dir and race on clone/tar.
+      let temp = ''
       const d = getDaytona()
       debug(
         `create: calling d.create() sandbox=${sandboxName(config.name)} envKeys=${Object.keys(toEnvVars(env)).join(',')}`,
@@ -236,7 +238,7 @@ export const DaytonaWorkspacePlugin = async (input: PluginInput) => {
           }
         }
 
-        await mkdir(temp, { recursive: true })
+        temp = await mkdtemp(join(tmpdir(), 'opencode-daytona-'))
         const dir = join(temp, 'repo')
         const tar = join(temp, 'repo.tgz')
         const source = `file://${worktree}`
@@ -310,7 +312,7 @@ export const DaytonaWorkspacePlugin = async (input: PluginInput) => {
         await d.delete(sandbox).catch(() => undefined)
         throw err
       } finally {
-        await rm(temp, { recursive: true, force: true }).catch(() => undefined)
+        if (temp) await rm(temp, { recursive: true, force: true }).catch(() => undefined)
       }
     },
 
