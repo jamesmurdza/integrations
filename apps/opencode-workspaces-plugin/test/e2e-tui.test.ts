@@ -25,6 +25,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
+import { mkdtempSync } from 'node:fs'
 import { mkdtemp, writeFile, rm, symlink, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -42,6 +43,19 @@ const ENABLED = HAS_KEY && HAS_TMUX && HAS_BIN
 // tmux server isolated on its own socket so we don't touch the user's sessions.
 const SOCKET = 'daytona-e2e'
 const WINDOW = 'oc'
+
+// Isolate the pane from the developer's shell/global config so the e2e is
+// reproducible on non-vanilla machines (otherwise it fails silently):
+//   SHELL=/bin/sh          — a heavy interactive init (zsh + plugins) races the
+//                            `cd … && opencode` we type right after new-session,
+//                            starting the TUI in the wrong directory.
+//   XDG_CONFIG_HOME=<tmp>   — a globally-set custom default agent kills the
+//                            warped session's first prompt on the remote. Auth
+//                            lives under XDG_DATA, so provider keys still forward.
+//   OPENCODE_SERVER_PASSWORD unset — the /global/health polls are unauthenticated
+//                            and 401 when it's exported.
+const PANE_ENV = { ...process.env, SHELL: '/bin/sh', XDG_CONFIG_HOME: mkdtempSync(join(tmpdir(), 'daytona-e2e-cfg-')) }
+delete PANE_ENV.OPENCODE_SERVER_PASSWORD
 const PLUGIN_LOG = '/tmp/daytona-plugin.log'
 // Distinctive token the model is asked to echo — won't collide with TUI chrome.
 const MAGIC = 'PINEAPPLE7391'
@@ -49,7 +63,7 @@ const MAGIC = 'PINEAPPLE7391'
 const PLUGIN_DOT_OPENCODE = resolve(import.meta.dir, '..', '.opencode')
 
 function tmux(...args: string[]) {
-  return spawnSync('tmux', ['-L', SOCKET, ...args], { encoding: 'utf8' })
+  return spawnSync('tmux', ['-L', SOCKET, ...args], { encoding: 'utf8', env: PANE_ENV })
 }
 function capture(): string {
   return tmux('capture-pane', '-t', WINDOW, '-p').stdout || ''
